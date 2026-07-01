@@ -37,12 +37,11 @@ WebMFrame::WebMFrame() :
 	time(0),
 	key(false)
 {}
+
 WebMFrame::~WebMFrame()
 {
 	free(buffer);
 }
-
-/**/
 
 WebMDemuxer::WebMDemuxer(mkvparser::IMkvReader *reader, int videoTrack, int audioTrack) :
 	m_reader(reader),
@@ -55,10 +54,11 @@ WebMDemuxer::WebMDemuxer(mkvparser::IMkvReader *reader, int videoTrack, int audi
 	m_eos(false)
 {
 	long long pos = 0;
-	if (mkvparser::EBMLHeader().Parse(m_reader, pos))
+
+	if (mkvparser::EBMLHeader().Parse(m_reader, pos) < 0)
 		return;
 
-	if (mkvparser::Segment::CreateInstance(m_reader, pos, m_segment))
+	if (mkvparser::Segment::CreateInstance(m_reader, pos, m_segment) < 0)
 		return;
 
 	if (m_segment->Load() < 0)
@@ -67,6 +67,7 @@ WebMDemuxer::WebMDemuxer(mkvparser::IMkvReader *reader, int videoTrack, int audi
 	const mkvparser::Tracks *tracks = m_segment->GetTracks();
 	const unsigned long tracksCount = tracks->GetTracksCount();
 	int currVideoTrack = -1, currAudioTrack = -1;
+
 	for (unsigned long i = 0; i < tracksCount; ++i)
 	{
 		const mkvparser::Track *track = tracks->GetTrackByIndex(i);
@@ -78,10 +79,13 @@ WebMDemuxer::WebMDemuxer(mkvparser::IMkvReader *reader, int videoTrack, int audi
 					m_vCodec = VIDEO_VP8;
 				else if (!strcmp(codecId, "V_VP9"))
 					m_vCodec = VIDEO_VP9;
+
 				if (m_vCodec != NO_VIDEO)
 					m_videoTrack = static_cast<const mkvparser::VideoTrack *>(track);
+
 				++currVideoTrack;
 			}
+
 			if ((!m_audioTrack || currAudioTrack != audioTrack) && track->GetType() == mkvparser::Track::kAudio)
 			{
 				if (!strcmp(codecId, "A_VORBIS"))
@@ -94,11 +98,13 @@ WebMDemuxer::WebMDemuxer(mkvparser::IMkvReader *reader, int videoTrack, int audi
 			}
 		}
 	}
+
 	if (!m_videoTrack && !m_audioTrack)
 		return;
 
 	m_isOpen = true;
 }
+
 WebMDemuxer::~WebMDemuxer()
 {
 	delete m_segment;
@@ -114,10 +120,12 @@ WebMDemuxer::VIDEO_CODEC WebMDemuxer::getVideoCodec() const
 {
 	return m_vCodec;
 }
+
 int WebMDemuxer::getWidth() const
 {
 	return m_videoTrack->GetWidth();
 }
+
 int WebMDemuxer::getHeight() const
 {
 	return m_videoTrack->GetHeight();
@@ -127,18 +135,22 @@ WebMDemuxer::AUDIO_CODEC WebMDemuxer::getAudioCodec() const
 {
 	return m_aCodec;
 }
+
 const unsigned char *WebMDemuxer::getAudioExtradata(size_t &size) const
 {
 	return m_audioTrack->GetCodecPrivate(size);
 }
+
 double WebMDemuxer::getSampleRate() const
 {
 	return m_audioTrack->GetSamplingRate();
 }
+
 int WebMDemuxer::getChannels() const
 {
 	return m_audioTrack->GetChannels();
 }
+
 int WebMDemuxer::getAudioDepth() const
 {
 	return m_audioTrack->GetBitDepth();
@@ -152,6 +164,7 @@ bool WebMDemuxer::readFrame(WebMFrame *videoFrame, WebMFrame *audioFrame)
 
 	if (videoFrame)
 		videoFrame->bufferSize = 0;
+
 	if (audioFrame)
 		audioFrame->bufferSize = 0;
 
@@ -168,6 +181,7 @@ bool WebMDemuxer::readFrame(WebMFrame *videoFrame, WebMFrame *audioFrame)
 	{
 		bool getNewBlock = false;
 		long status = 0;
+
 		if (!m_blockEntry && !blockEntryEOS)
 		{
 			status = m_cluster->GetFirst(m_blockEntry);
@@ -195,8 +209,10 @@ bool WebMDemuxer::readFrame(WebMFrame *videoFrame, WebMFrame *audioFrame)
 			}
 			getNewBlock = true;
 		}
+
 		if (status || !m_blockEntry)
 			return false;
+
 		if (getNewBlock)
 		{
 			m_block = m_blockEntry->GetBlock();
@@ -207,28 +223,31 @@ bool WebMDemuxer::readFrame(WebMFrame *videoFrame, WebMFrame *audioFrame)
 	WebMFrame *frame = NULL;
 
 	const long trackNumber = m_block->GetTrackNumber();
+
 	if (trackNumber == videoTrackNumber)
 		frame = videoFrame;
 	else if (trackNumber == audioTrackNumber)
 		frame = audioFrame;
 	else
 	{
-		//Should not be possible
+		// Should not be possible
 		assert(trackNumber == videoTrackNumber || trackNumber == audioTrackNumber);
 		return false;
 	}
 
 	const mkvparser::Block::Frame &blockFrame = m_block->GetFrame(m_blockFrameIndex++);
+
 	if (blockFrame.len > frame->bufferCapacity)
 	{
 		unsigned char *newBuff = (unsigned char *)realloc(frame->buffer, frame->bufferCapacity = blockFrame.len);
+
 		if (newBuff)
 			frame->buffer = newBuff;
 		else // Out of memory
 			return false;
 	}
-	frame->bufferSize = blockFrame.len;
 
+	frame->bufferSize = blockFrame.len;
 	frame->time = m_block->GetTime(m_cluster) / 1e9;
 	frame->key  = m_block->IsKey();
 

@@ -69,6 +69,7 @@ VPXDecoder::VPXDecoder(const WebMDemuxer &demuxer, unsigned threads) :
 		m_ctx = NULL;
 	}
 }
+
 VPXDecoder::~VPXDecoder()
 {
 	if (m_ctx)
@@ -83,9 +84,9 @@ bool VPXDecoder::decode(const WebMFrame &frame)
 	m_iter = NULL;
 	return !vpx_codec_decode(m_ctx, frame.buffer, frame.bufferSize, NULL, 0);
 }
+
 VPXDecoder::IMAGE_ERROR VPXDecoder::getImage(Image &image)
 {
-	IMAGE_ERROR err = NO_FRAME;
 	if (vpx_image_t *img = vpx_codec_get_frame(m_ctx, &m_iter))
 	{
 		// It seems to be a common problem that UNKNOWN comes up a lot, yet FFMPEG is somehow getting accurate colour-space information.
@@ -114,18 +115,17 @@ VPXDecoder::IMAGE_ERROR VPXDecoder::getImage(Image &image)
 				image.linesize[1] = img->stride[uPlane];
 				image.linesize[2] = img->stride[vPlane];
 
-				err = NO_ERROR;
+				return NO_ERROR;
 			}
 		}
 		else
 		{
-			err = UNSUPPORTED_FRAME;
+			return UNSUPPORTED_FRAME;
 		}
 	}
-	return err;
-}
 
-/**/
+	return NO_FRAME;
+}
 
 static inline int ceilRshift(int val, int shift)
 {
@@ -138,6 +138,7 @@ int VPXDecoder::Image::getWidth(int plane) const
 		return w;
 	return ceilRshift(w, chromaShiftW);
 }
+
 int VPXDecoder::Image::getHeight(int plane) const
 {
 	if (!plane)

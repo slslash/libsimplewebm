@@ -69,7 +69,7 @@ public:
 	}
 
 	bool decode(const WebMFrame &frame);
-	IMAGE_ERROR getImage(Image &image); //The data is NOT copied! Only 3-plane, 8-bit images are supported.
+	IMAGE_ERROR getImage(Image &image); // The data is NOT copied! Only 3-plane, 8-bit images are supported.
 
 private:
 	vpx_codec_ctx *m_ctx;

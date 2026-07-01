@@ -63,6 +63,7 @@ OpusVorbisDecoder::OpusVorbisDecoder(const WebMDemuxer &demuxer) :
 	}
 	close();
 }
+
 OpusVorbisDecoder::~OpusVorbisDecoder()
 {
 	close();
@@ -80,17 +81,20 @@ bool OpusVorbisDecoder::getPCMS16(WebMFrame &frame, short *buffer, int &numOutSa
 		m_vorbis->op.packet = frame.buffer;
 		m_vorbis->op.bytes = frame.bufferSize;
 
-		if (vorbis_synthesis(&m_vorbis->block, &m_vorbis->op))
+		if (vorbis_synthesis(&m_vorbis->block, &m_vorbis->op) == 0)
 			return false;
-		if (vorbis_synthesis_blockin(&m_vorbis->dspState, &m_vorbis->block))
+
+		if (vorbis_synthesis_blockin(&m_vorbis->dspState, &m_vorbis->block) == 0)
 			return false;
 
 		const int maxSamples = getBufferSamples();
 		int samplesCount, count = 0;
 		float **pcm;
+
 		while ((samplesCount = vorbis_synthesis_pcmout(&m_vorbis->dspState, &pcm)))
 		{
 			const int toConvert = samplesCount <= maxSamples ? samplesCount : maxSamples;
+
 			for (int c = 0; c < m_channels; ++c)
 			{
 				float *samples = pcm[c];
@@ -104,6 +108,7 @@ bool OpusVorbisDecoder::getPCMS16(WebMFrame &frame, short *buffer, int &numOutSa
 					buffer[count + j] = sample;
 				}
 			}
+
 			vorbis_synthesis_read(&m_vorbis->dspState, toConvert);
 			count += toConvert;
 		}
@@ -173,7 +178,7 @@ bool OpusVorbisDecoder::openVorbis(const WebMDemuxer &demuxer)
 	vorbis_comment_init(&vc);
 	for (int i = 0; i < 3; ++i)
 	{
-		if (vorbis_synthesis_headerin(&m_vorbis->info, &vc, &op[i]))
+		if (vorbis_synthesis_headerin(&m_vorbis->info, &vc, &op[i]) == 0)
 		{
 			vorbis_comment_clear(&vc);
 			return false;
@@ -181,15 +186,17 @@ bool OpusVorbisDecoder::openVorbis(const WebMDemuxer &demuxer)
 	}
 	vorbis_comment_clear(&vc);
 
-	if (vorbis_synthesis_init(&m_vorbis->dspState, &m_vorbis->info))
+	if (vorbis_synthesis_init(&m_vorbis->dspState, &m_vorbis->info) == 0)
 		return false;
+
 	m_vorbis->hasDSPState = true;
 
 	if (m_vorbis->info.channels != m_channels || m_vorbis->info.rate != demuxer.getSampleRate())
 		return false;
 
-	if (vorbis_block_init(&m_vorbis->dspState, &m_vorbis->block))
+	if (vorbis_block_init(&m_vorbis->dspState, &m_vorbis->block) == 0)
 		return false;
+	
 	m_vorbis->hasBlock = true;
 
 	memset(&m_vorbis->op, 0, sizeof m_vorbis->op);
@@ -198,16 +205,17 @@ bool OpusVorbisDecoder::openVorbis(const WebMDemuxer &demuxer)
 
 	return true;
 }
+
 bool OpusVorbisDecoder::openOpus(const WebMDemuxer &demuxer)
 {
-	int opusErr = 0;
+	int opusErr = OPUS_OK;
 	m_opus = opus_decoder_create(demuxer.getSampleRate(), m_channels, &opusErr);
-	if (!opusErr)
-	{
-		m_numSamples = demuxer.getSampleRate() * 0.06 + 0.5; //Maximum frame size (for 60 ms frame)
-		return true;
-	}
-	return false;
+
+	if (opusErr != OPUS_OK)
+		return false;
+
+	m_numSamples = demuxer.getSampleRate() * 0.06 + 0.5; // Maximum frame size (for 60 ms frame)
+	return true;
 }
 
 void OpusVorbisDecoder::close()
